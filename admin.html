@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>linline_more 後台</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#2a1c18;color:#f1e4d4;font-family:"Noto Serif TC","Songti TC",Georgia,serif;padding-bottom:40px}
+h1{font-size:18px;text-align:center;margin:0;padding:14px;border-bottom:1px solid #4d372c;font-weight:600}
+.w{padding:14px;display:grid;gap:10px}
+input,textarea{width:100%;font:inherit;font-size:16px;padding:10px;border-radius:8px;border:1px solid #4d372c;background:#37261f;color:#f1e4d4}
+textarea{min-height:90px}button{font:inherit;cursor:pointer}
+.b{background:#c9a27e;color:#2a1c18;border:0;border-radius:10px;padding:13px;font-size:16px;width:100%}
+.b:disabled{opacity:.6}
+.l{background:none;border:0;color:#c9a27e;font-size:15px;padding:6px}
+.row{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid #4d372c}
+.row img{width:54px;height:54px;object-fit:cover;border-radius:6px}
+.row .m{flex:1;min-width:0;font-size:14px}
+.o,.d{background:none;border-radius:8px;padding:6px 10px;font-size:13px}
+.o{border:1px solid #c9a27e;color:#c9a27e}.d{border:1px solid #d0624f;color:#d0624f}
+.s{width:70px;padding:5px 8px;font-size:14px;margin-top:4px}
+.t{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 16px;border-radius:20px;font-size:13px;z-index:9;max-width:90%;text-align:center}
+.mut{font-size:12px;color:#b39b87}
+</style></head><body>
+<h1>linline_more 後台</h1><div id="app"></div>
+<script>
+const O='winnie-money',R='linline-more',API='https://api.github.com/repos/'+O+'/'+R+'/contents/';
+const $=s=>document.querySelector(s);
+const esc=s=>{const d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML};
+const money=v=>'NT$ '+Number(v||0).toLocaleString('en-US');
+const src=u=>/^(data:|http)/.test(u)?u:'https://raw.githubusercontent.com/'+O+'/'+R+'/main/'+u;
+let tok=localStorage.getItem('tok')||'',data=[],sha=null,keep=[],eid=null;
+const H=a=>({Authorization:'Bearer '+tok,Accept:a||'application/vnd.github+json'});
+function toast(m,ms){const t=document.createElement('div');t.className='t';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),ms||3000)}
+const dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g,'')),c=>c.charCodeAt(0)));
+const enc=s=>btoa(unescape(encodeURIComponent(s)));
+async function load(){
+  const r=await fetch(API+'products.json?ref=main&t='+Date.now(),{headers:H('application/vnd.github.object+json'),cache:'no-store'});
+  if(r.status===401||r.status===403)throw new Error('auth');
+  if(r.status===404){data=[];sha=null;return}
+  if(!r.ok)throw new Error(r.status);
+  const j=await r.json();sha=j.sha;
+  if(j.content){data=JSON.parse(dec(j.content))}
+  else{const rr=await fetch(API+'products.json?ref=main',{headers:H('application/vnd.github.raw+json'),cache:'no-store'});data=await rr.json()}
+}
+async function put(path,b64,msg,s){
+  const r=await fetch(API+path,{method:'PUT',headers:Object.assign(H(),{'Content-Type':'application/json'}),body:JSON.stringify(Object.assign({message:msg,content:b64,branch:'main'},s?{sha:s}:{}))});
+  if(!r.ok)throw new Error(r.status);return r.json();
+}
+async function saveData(){const j=await put('products.json',enc(JSON.stringify(data)),'update products',sha);sha=j.content.sha}
+function shrink(file){return new Promise((ok,no)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{const k=Math.min(1,1000/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',.8).split(',')[1])};im.onerror=no;im.src=u})}
+async function up(b64){const n='img/'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)+'.jpg';await put(n,b64,'photo');return n}
+function renderPh(){
+  const h=$('#ph');if(!h)return;
+  h.innerHTML=keep.map((u,i)=>`<div style="position:relative"><img data-i="${i}" class="pth" src="${esc(src(u))}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;display:block;${i===0?'outline:2px solid #c9a27e':''}"><button type="button" data-x="${i}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:11px;border:0;background:#b3402f;color:#fff;font-size:13px;line-height:1">✕</button>${i===0?'<div class="mut" style="text-align:center;color:#c9a27e">封面</div>':''}</div>`).join('');
+  h.querySelectorAll('[data-x]').forEach(x=>x.onclick=()=>{keep.splice(+x.dataset.x,1);renderPh()});
+  h.querySelectorAll('.pth').forEach(im=>im.onclick=()=>{const i=+im.dataset.i;if(i>0){keep.unshift(...keep.splice(i,1));renderPh()}});
+}
+function view(){
+  if(!tok){
+    $('#app').innerHTML='<div class="w"><b>首次設定</b><div class="mut">貼上你的 GitHub 金鑰（Token）。只會存在這支手機的瀏覽器裡。</div><input id="tk" placeholder="github_pat_..." autocapitalize="off" autocorrect="off"><button class="b" id="go">登入</button></div>';
+    $('#go').onclick=async()=>{tok=$('#tk').value.trim();try{await load();localStorage.setItem('tok',tok);view()}catch(e){tok='';toast('金鑰無效或權限不足')}};
+    return;
+  }
+  const ep=eid?data.find(x=>x.id===eid):null;
+  $('#app').innerHTML=`<form id="f" class="w" style="border-bottom:1px solid #4d372c"><div style="display:flex;justify-content:space-between;align-items:center"><b>${ep?'編輯商品':'新增商品'}</b>${ep?'<button type="button" class="l" id="cx">取消編輯</button>':''}</div><div id="ph" style="display:flex;gap:10px;flex-wrap:wrap"></div>${ep?'<span class="mut">點照片設為封面，✕ 移除；下方可再加新照片</span>':''}<input type="file" id="img" accept="image/*" multiple ${ep?'':'required'}><span class="mut">可一次選多張，第一張是封面</span><input id="nm" placeholder="商品名稱" required><textarea id="dt" placeholder="詳細資訊（年代、尺寸、狀態…）"></textarea><input id="pr" type="number" inputmode="numeric" min="0" placeholder="價格（NT$）" required><input id="st" type="number" inputmode="numeric" min="0" placeholder="庫存數量" required><button class="b" id="sv">${ep?'儲存修改':'上架商品'}</button></form>
+  <div class="mut" style="padding:12px 14px 4px">已上架 ${data.length} 件 · <a href="index.html" style="color:#c9a27e">看前台</a> · <button class="l" id="out" style="font-size:12px">登出</button></div>
+  <div>${data.map(p=>`<div class="row"><img src="${esc(src(p.imgs[0].url))}" alt=""><div class="m">${esc(p.name)}<br><span class="mut">${money(p.price)}</span><br><span class="mut">庫存 </span><input class="s" type="number" min="0" inputmode="numeric" data-id="${esc(p.id)}" value="${p.stock==null?'':p.stock}"></div><div style="display:grid;gap:6px"><button class="o" data-e="${esc(p.id)}">編輯</button><button class="d" data-d="${esc(p.id)}">刪除</button></div></div>`).join('')}</div>`;
+  if(ep){$('#nm').value=ep.name||'';$('#dt').value=ep.detail||'';$('#pr').value=ep.price;$('#st').value=ep.stock==null?'':ep.stock;$('#cx').onclick=()=>{eid=null;keep=[];view()}}
+  renderPh();
+  $('#out').onclick=()=>{localStorage.removeItem('tok');tok='';view()};
+  document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{eid=b.dataset.e;keep=data.find(x=>x.id===eid).imgs.map(i=>i.url);view();scrollTo(0,0)});
+  document.querySelectorAll('.s').forEach(inp=>inp.onchange=async()=>{
+    if(inp.value==='')return;
+    try{await load();const p=data.find(x=>x.id===inp.dataset.id);if(!p)return;p.stock=Math.max(0,Number(inp.value));await saveData();toast('庫存已更新，約 1 分鐘後前台更新',4000)}catch(e){toast('更新失敗：'+e.message)}
+  });
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{
+    if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='再按一次確定';setTimeout(()=>{b.dataset.arm='';b.textContent='刪除'},4000);return}
+    try{await load();data=data.filter(x=>x.id!==b.dataset.d);await saveData();toast('已刪除，約 1 分鐘後前台更新',4000);view()}catch(e){toast('刪除失敗：'+e.message)}
+  });
+  $('#f').onsubmit=async e=>{
+    e.preventDefault();const fs=[...$('#img').files];
+    if(!keep.length&&!fs.length){toast('請至少放一張照片');return}
+    const b=$('#sv'),lab=b.textContent;b.disabled=true;
+    try{
+      await load();
+      const add=[];
+      for(let k=0;k<fs.length;k++){b.textContent='上傳照片 '+(k+1)+'/'+fs.length+'…';add.push(await up(await shrink(fs[k])))}
+      const rec={name:$('#nm').value.trim(),detail:$('#dt').value.trim(),price:Number($('#pr').value),stock:Number($('#st').value),imgs:keep.concat(add).map(u=>({url:u}))};
+      const cur=eid?data.find(x=>x.id===eid):null;
+      if(cur)Object.assign(cur,rec);else data.unshift(Object.assign({id:'p'+Date.now().toString(36)},rec));
+      b.textContent='儲存中…';await saveData();
+      toast('已儲存，約 1 分鐘後前台更新',4000);eid=null;keep=[];view();
+    }catch(err){b.disabled=false;b.textContent=lab;toast('儲存失敗：'+err.message)}
+  };
+}
+(async()=>{if(tok){try{await load()}catch(e){tok='';localStorage.removeItem('tok')}}view()})();
+</script></body></html>
